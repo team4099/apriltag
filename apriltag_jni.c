@@ -9,6 +9,12 @@
 
 #include "apriltag.h"
 #include "tag36h11.h"
+#include "apriltag_pose.h"
+
+#define  LOG_TAG    "apriltag_jni_output"
+
+#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static struct {
     apriltag_detector_t *td;
@@ -20,17 +26,21 @@ static struct {
     jclass ad_cls;
     jmethodID ad_constructor;
     jfieldID ad_id_field, ad_hamming_field, ad_c_field, ad_p_field;
+    jclass apriltag_pose_class;
+    jmethodID apriltag_pose_constructor;
+    jfieldID apriltag_pose_id_field, apriltag_pose_hamming_field, apriltag_pose_center_field, apriltag_pose_corners_field, apriltag_pose_translationMeters_1_field, apriltag_pose_rotation_1_field, apriltag_pose_translationMeters_2_field, apriltag_pose_rotation_2_field, apriltag_pose_poseConfidence_field;
+
 } state;
 
 JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_1init
-    (JNIEnv *env, jclass cls)
+        (JNIEnv *env, jclass cls)
 {
     // Just do method lookups once and cache the results
 
     // Get ArrayList methods
     jclass al_cls = (*env)->FindClass(env, "java/util/ArrayList");
     if (!al_cls) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        LOGE(
                             "couldn't find ArrayList class");
         return;
     }
@@ -39,7 +49,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_
     state.al_constructor = (*env)->GetMethodID(env, al_cls, "<init>", "()V");
     state.al_add = (*env)->GetMethodID(env, al_cls, "add", "(Ljava/lang/Object;)Z");
     if (!state.al_constructor || !state.al_add) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        LOGE(
                             "couldn't find ArrayList methods");
         return;
     }
@@ -47,7 +57,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_
     // Get ApriltagDetection methods
     jclass ad_cls = (*env)->FindClass(env, "edu/umich/eecs/april/apriltag/ApriltagDetection");
     if (!ad_cls) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        LOGE(
                             "couldn't find ApriltagDetection class");
         return;
     }
@@ -55,7 +65,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_
 
     state.ad_constructor = (*env)->GetMethodID(env, ad_cls, "<init>", "()V");
     if (!state.ad_constructor) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        LOGE(
                             "couldn't find ApriltagDetection constructor");
         return;
     }
@@ -65,13 +75,55 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_
     state.ad_c_field = (*env)->GetFieldID(env, ad_cls, "c", "[D");
     state.ad_p_field = (*env)->GetFieldID(env, ad_cls, "p", "[D");
     if (!state.ad_id_field ||
-            !state.ad_hamming_field ||
-            !state.ad_c_field ||
-            !state.ad_p_field) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        !state.ad_hamming_field ||
+        !state.ad_c_field ||
+        !state.ad_p_field) {
+        LOGE(
                             "couldn't find ApriltagDetection fields");
         return;
     }
+
+    // Get ApriltagPose methods
+    jclass apriltag_pose_class = (*env)->FindClass(env, "edu/umich/eecs/april/apriltag/ApriltagPose");
+    if (!apriltag_pose_class) {
+        LOGE(
+                            "couldn't find ApriltagPose class");
+        return;
+    }
+    state.apriltag_pose_class = (*env)->NewGlobalRef(env, apriltag_pose_class);
+
+    state.apriltag_pose_constructor = (*env)->GetMethodID(env, apriltag_pose_class, "<init>", "()V");
+    if (!state.apriltag_pose_constructor) {
+        LOGE(
+                            "couldn't find ApriltagDetection constructor");
+        return;
+    }
+
+    state.apriltag_pose_id_field = (*env)->GetFieldID(env, apriltag_pose_class, "id", "I");
+    state.apriltag_pose_hamming_field = (*env)->GetFieldID(env, apriltag_pose_class, "hamming", "I");
+    state.apriltag_pose_center_field = (*env)->GetFieldID(env, apriltag_pose_class, "center", "[D");
+    state.apriltag_pose_corners_field = (*env)->GetFieldID(env, apriltag_pose_class, "corners", "[D");
+    state.apriltag_pose_translationMeters_1_field = (*env)->GetFieldID(env, apriltag_pose_class, "translationMeters_1", "[D");
+    state.apriltag_pose_rotation_1_field = (*env)->GetFieldID(env, apriltag_pose_class, "rotation_1", "[D");
+    state.apriltag_pose_translationMeters_2_field = (*env)->GetFieldID(env, apriltag_pose_class, "translationMeters_2", "[D");
+    state.apriltag_pose_rotation_2_field = (*env)->GetFieldID(env, apriltag_pose_class, "rotation_2", "[D");
+    state.apriltag_pose_poseConfidence_field = (*env)->GetFieldID(env, apriltag_pose_class, "poseConfidence", "D");
+
+    if (!state.apriltag_pose_id_field ||
+        !state.apriltag_pose_hamming_field ||
+        !state.apriltag_pose_center_field ||
+        !state.apriltag_pose_corners_field ||
+        !state.apriltag_pose_translationMeters_1_field ||
+        !state.apriltag_pose_rotation_1_field ||
+        !state.apriltag_pose_translationMeters_2_field ||
+        !state.apriltag_pose_rotation_2_field ||
+        !state.apriltag_pose_poseConfidence_field
+        ) {
+            LOGE("couldn't find AprilTagPose fields");
+        return;
+    }
+
+
 }
 
 /*
@@ -80,7 +132,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_native_
  * Signature: ([BIILandroid/graphics/Bitmap;)V
  */
 JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_yuv_1to_1rgb
-    (JNIEnv *env, jclass cls, jbyteArray _src, jint width, jint height, jobject _dst)
+        (JNIEnv *env, jclass cls, jbyteArray _src, jint width, jint height, jobject _dst)
 {
     // NV21 Format
     // width*height    luma (Y) bytes followed by
@@ -91,7 +143,7 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_yuv_1to
     AndroidBitmap_lockPixels(env, _dst, &dst);
 
     if (!dst) {
-        __android_log_write(ANDROID_LOG_ERROR, "apriltag_jni",
+        LOGE(
                             "couldn't lock bitmap");
         return;
     }
@@ -239,4 +291,103 @@ JNIEXPORT jobject JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_apri
     return al;
 }
 
+JNIEXPORT jobject JNICALL
+Java_edu_umich_eecs_april_apriltag_ApriltagNative_getApriltagPoses(JNIEnv *env, jclass clazz,
+                                                                   jdouble tag_size_meters,
+                                                                   jbyteArray _buf, jint width,
+                                                                   jint height, jdouble fx,
+                                                                   jdouble fy, jdouble cx,
+                                                                   jdouble cy) {
+    // Use the luma channel (the first width*height elements)
+    // as grayscale input image
+    jbyte *buf = (*env)->GetByteArrayElements(env, _buf, NULL);
+    image_u8_t im = {
+            .buf = (uint8_t*)buf,
+            .height = height,
+            .width = width,
+            .stride = width
+    };
+    zarray_t *detections = apriltag_detector_detect(state.td, &im);
+    (*env)->ReleaseByteArrayElements(env, _buf, buf, 0);
 
+    // al = new ArrayList();
+    jobject al = (*env)->NewObject(env, state.al_cls, state.al_constructor);
+    for (int i = 0; i < zarray_size(detections); i += 1) {
+        apriltag_detection_t *det;
+        zarray_get(detections, i, &det);
+        apriltag_detection_info_t tag_info = {
+                .tagsize = tag_size_meters,
+                .det = det,
+                .fx = fx,
+                .fy = fy,
+                .cx = cx,
+                .cy = cy
+        };
+
+        apriltag_pose_t pose1 = {};
+        apriltag_pose_t pose2 = {};
+        double err1 = 0.0;
+        double err2 = 0.0;
+        int iterations = 25; // TODO figure out best iteration value (higher = slower but lower = less accurate)
+        estimate_tag_pose_orthogonal_iteration(
+                &tag_info,
+                &err1,
+                &pose1,
+                &err2,
+                &pose2,
+                iterations
+                );
+        if (err1 > err2){
+            apriltag_pose_t temp_pose = pose1;
+            pose1 = pose2;
+            pose2 = temp_pose;
+            double temp_err = err1;
+            err1 = err2;
+            err2 = temp_err;
+        }
+        double pose_confidence = err1/err2;
+
+        // apriltag_pose = new ApriltagPose();
+        jobject apriltag_pose = (*env)->NewObject(env, state.apriltag_pose_class, state.apriltag_pose_constructor);
+        (*env)->SetIntField(env, apriltag_pose, state.apriltag_pose_id_field, det->id);
+        (*env)->SetIntField(env, apriltag_pose, state.apriltag_pose_hamming_field, det->hamming);
+        (*env)->SetDoubleField(env, apriltag_pose, state.apriltag_pose_poseConfidence_field, pose_confidence);
+
+        jdoubleArray apriltag_pose_center = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_center_field);
+        (*env)->SetDoubleArrayRegion(env, apriltag_pose_center, 0, 2, det->c);
+        jdoubleArray apriltag_pose_corners = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_corners_field);
+        (*env)->SetDoubleArrayRegion(env, apriltag_pose_corners, 0, 8, (double*)det->p);
+//
+        jdoubleArray apriltag_pose_translation_1 = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_translationMeters_1_field);
+        (*env)->SetDoubleArrayRegion(env, apriltag_pose_translation_1, 0, 3, (double*)(pose1.t->data));
+//
+        jdoubleArray apriltag_pose_rotation_1 = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_rotation_1_field);
+        (*env)->SetDoubleArrayRegion(env, apriltag_pose_rotation_1, 0, 9, pose1.R->data);
+//
+        if(pose2.t){
+            jdoubleArray apriltag_pose_translation_2 = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_translationMeters_2_field);
+            (*env)->SetDoubleArrayRegion(env, apriltag_pose_translation_2, 0, 3, pose2.t->data);
+            jdoubleArray apriltag_pose_rotation_2 = (*env)->GetObjectField(env, apriltag_pose, state.apriltag_pose_rotation_2_field);
+            (*env)->SetDoubleArrayRegion(env, apriltag_pose_rotation_2, 0, 9, pose2.R->data);
+            (*env)->CallBooleanMethod(env, al, state.al_add, apriltag_pose);
+            (*env)->DeleteLocalRef(env, apriltag_pose_translation_2);
+            (*env)->DeleteLocalRef(env, apriltag_pose_rotation_2);
+        } else {
+            // al.add(apriltag_pose);
+            (*env)->CallBooleanMethod(env, al, state.al_add, apriltag_pose);
+        }
+
+        // Need to respect the local reference limit
+        (*env)->DeleteLocalRef(env, apriltag_pose);
+        (*env)->DeleteLocalRef(env, apriltag_pose_center);
+        (*env)->DeleteLocalRef(env, apriltag_pose_corners);
+        (*env)->DeleteLocalRef(env, apriltag_pose_translation_1);
+        (*env)->DeleteLocalRef(env, apriltag_pose_rotation_1);
+
+    }
+
+    // Cleanup
+    apriltag_detections_destroy(detections);
+
+    return al;
+}
