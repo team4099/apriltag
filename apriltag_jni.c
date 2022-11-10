@@ -9,6 +9,7 @@
 
 #include "apriltag.h"
 #include "tag36h11.h"
+#include "tag16h5.h"
 #include "apriltag_pose.h"
 
 #define  LOG_TAG    "apriltag_jni_output"
@@ -215,6 +216,9 @@ JNIEXPORT void JNICALL Java_edu_umich_eecs_april_apriltag_ApriltagNative_aprilta
     if (!strcmp(tfname, "tag36h11")) {
         state.tf = tag36h11_create();
         state.tf_destroy = tag36h11_destroy;
+    } else if (!strcmp(tfname, "tag16h5")) {
+        state.tf = tag16h5_create();
+        state.tf_destroy = tag16h5_destroy;
     } else {
         __android_log_print(ANDROID_LOG_ERROR, "apriltag_jni",
                             "invalid tag family: %s", tfname);
